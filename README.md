@@ -19,10 +19,12 @@
         CheckStock -->|No| ReturnStock[Return OUT_OF_STOCK]
         CheckStock -->|Yes| StockReserved[✓ Stock Reserved]
         
-        StockReserved --> WaitPay[Wait for Payment Signal]
-        WaitPay --> UserPay[User: POST /cart/123/pay]
-        UserPay --> ProcessPay[Process Payment]
+        StockReserved --> WaitPay[Wait for Payment Signal or Reservation Expired]
         
+        WaitPay -->|User pays| UserPay[User: POST /cart/123/pay]
+        WaitPay -->|Timeout| ReservationExpired[Reservation Expired Signal]
+
+        UserPay --> ProcessPay[Process Payment]
         ProcessPay --> CheckPay{Payment<br/>Success?}
         
         CheckPay -->|Yes| Success[✓ Payment Complete]
@@ -31,6 +33,8 @@
         ClearCart --> Done([Order Complete ✅])
         
         CheckPay -->|No| CompStart[Start Compensation]
+        ReservationExpired --> CompStart
+
         CompStart --> Refund[Refund Payment<br/>if charged]
         Refund --> Release[Release Reserved Stock]
         Release --> Failed([Order Failed ❌<br/>All changes rolled back])
@@ -43,6 +47,8 @@
         style Failed fill:#FF6B6B
         style StockReserved fill:#87CEEB
         style Commit fill:#90EE90
+        style ReservationExpired fill:#FFA500
+
 ```
 
 ## Recording Scenarios
