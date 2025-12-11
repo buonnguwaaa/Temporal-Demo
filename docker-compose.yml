@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  temporal:
+    image: temporalio/temporal:latest
+    command: server start-dev --ip 0.0.0.0
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    networks:
+      - app-network
+
+  temporal-orchestrator:
+    build: ./temporal-orchestrator
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
+    networks:
+      - app-network
+
+  cart-service:
+    build: ./cart-service
+    ports:
+      - "4000:4000"
+    depends_on:
+      - temporal-orchestrator
+    networks:
+      - app-network
+
+  inventory-service:
+    build: ./inventory-service
+    ports:
+      - "4001:4001"
+    depends_on:
+      - temporal-orchestrator
+    networks:
+      - app-network
+
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "4002:4002"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
