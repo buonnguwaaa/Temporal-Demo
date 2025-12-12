@@ -1,5 +1,13 @@
+// ===================================
 // workflows/orderWorkflow.js
-import { proxyActivities, defineSignal, setHandler, condition, workflowInfo } from "@temporalio/workflow";
+// ===================================
+import { 
+  proxyActivities, 
+  defineSignal, 
+  setHandler, 
+  condition,
+  workflowInfo
+} from "@temporalio/workflow";
 
 const {
   reserveStock,
@@ -20,16 +28,15 @@ const { pay, refund } = proxyActivities({
   taskQueue: "ORDER_QUEUE"
 });
 
-// signal from /cart/:id/pay
+// SIGNALS
 export const paymentSignal = defineSignal("payment");
 export const reservationExpiredSignal = defineSignal("reservationExpired");
 
-export async function orderWorkflow( cartId, items) {
+export async function orderWorkflow(cartId, items) {
   const { workflowId } = workflowInfo();
-  const orderId = workflowId;
-  console.log("Workflow started", { orderId });
-
   const reservationId = `resv-${cartId}-${Date.now()}`;
+
+  console.log("Workflow started", { orderId: workflowId });
 
   //
   // 1. Reserve stock
@@ -39,23 +46,43 @@ export async function orderWorkflow( cartId, items) {
     return { success: false, reason: "OUT_OF_STOCK" };
   }
 
+  console.log("Stock reserved:", reservationId);
+
   //
-  // 2. Wait payment
+  // 2. Wait for payment OR expiration signal
   //
   let paymentData = null;
-  let expired = false;
+  let expiredData = null;
+
   setHandler(paymentSignal, (data) => {
+    console.log("Received payment signal");
     paymentData = data;
   });
-  setHandler(reservationExpiredSignal, () => {
-    expired = true;
+
+  setHandler(reservationExpiredSignal, (data) => {
+    console.log("Received expiration signal:", data);
+    expiredData = data;
   });
 
-  await condition(() => paymentData || expired);
-  
-  if (expired) {
-    return { success: false, reason: "RESERVATION_EXPIRED" };
+  // Wait cho 1 trong 2 events
+  await condition(() => paymentData !== null || expiredData !== null);
+
+  // CASE 1: EXPIRED TRƯỚC - GỌI RELEASE ACTIVITY
+  if (expiredData) {
+    console.log("Reservation expired");
+    
+    await releaseStock(reservationId);
+    
+    return { 
+      success: false, 
+      reason: "RESERVATION_EXPIRED",
+      message: "Stock reservation timed out"
+    };
   }
+
+  // CASE 2: PAYMENT RECEIVED
+  console.log("Payment received - processing...");
+
   //
   // 3. Process Payment
   //
@@ -68,16 +95,24 @@ export async function orderWorkflow( cartId, items) {
       throw new Error("Payment failed");
     }
 
-    //
-    // 4. COMMIT INVENTORY
-    //
-    const commit = await commitStock(reservationId);
-    if (!commit.success) throw new Error("Commit stock failed");
+    console.log("Payment successful:", payResult.transactionId);
 
     //
-    // 5. CLEAR THE CART
+    // 4. Commit inventory
+    //
+    const commit = await commitStock(reservationId);
+    if (!commit.success) {
+      throw new Error("Commit stock failed");
+    }
+
+    console.log("Stock committed");
+
+    //
+    // 5. Clear cart
     //
     await clearCart(cartId);
+
+    console.log("Cart cleared - order complete");
 
     return {
       success: true,
@@ -86,17 +121,21 @@ export async function orderWorkflow( cartId, items) {
 
   } catch (err) {
     //
-    // COMPENSATION
+    // COMPENSATION: GỌI RELEASE ACTIVITY
     //
+    console.log("Error occurred - compensating...", err.message);
+    
     if (payResult?.transactionId) {
+      console.log("Refunding payment:", payResult.transactionId);
       await refund(payResult.transactionId);
     }
 
+    console.log("Releasing stock via activity");
     await releaseStock(reservationId);
 
     return {
       success: false,
-      reason: "FAILED",
+      reason: "PAYMENT_FAILED",
       message: err.message
     };
   }

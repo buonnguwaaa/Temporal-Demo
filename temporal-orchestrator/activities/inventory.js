@@ -28,10 +28,5 @@ module.exports = {
     });
 
     return res.data;
-  },
-
-  async checkReservation(reservationId) {
-    const res = await axios.get(`${INV_URL}/reservation/${reservationId}`);
-    return res.data;
   }
 }

@@ -55,26 +55,24 @@
 ### Scenario 1: Happy Case 
 1. User adds products to cart
 2. User checkouts
-3. User processes payment within the reservation time
-4. Done
+3. Stocks are reserved in a fixed amount of time
+4. User processes payment within the reservation time
+5. Commit stocks and clear current cart
+6. End workflow
 
 ### Scenario 2: Reservation Timeout
 1. User add products to cart
 2. User checkouts
-3. User does not process payment within the reservation time
-4. Done
+3. Stocks are reserved in a fixed amount of time
+4. User does not process payment within the reservation time
+5. Release stocks to compensate
+4. End workflow
 
 ### Scenario 3: Internet Connection Interrupted
 1. User add products to cart
 2. User checkouts
-3. User processes payment but get disconnected due to network issues
-4. Temporal performs retries
-5. Retry successful
-6. Done
-
-### Scenario 4: Out of stock
-1. User add products to cart
-2. User checkouts
-3. Temporal check available stocks from inventory service
-4. Inform "Out of stock"
-5. Done
+3. Stocks are reserved in a fixed amount of time
+4. User processes payment but get disconnected due to network issues
+5. Temporal performs retries
+6. Retry successful, commit stocks and clear current cart
+7. End workflow

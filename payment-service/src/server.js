@@ -2,13 +2,21 @@ const express = require("express");
 
 const app = express();
 app.use(express.json());
-// app.use(demoFail);
 
 // fake payment processing
 app.post("/pay", async (req, res) => {
   const { userId, amount } = req.body;
 
   console.log("PAYMENT REQUEST:", { userId, amount });
+
+  // simulate business error
+  if (amount <= 50) {
+    return res.status(400).json({
+      ok: false,
+      transactionId: Date.now().toString(),
+      message: "Invalid amount"
+    });
+  }
 
   res.json({
     ok: true,
